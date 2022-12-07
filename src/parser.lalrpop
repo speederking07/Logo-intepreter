@@ -1,0 +1,101 @@
+use std::str::FromStr;
+use crate::ast::ast::*;
+
+
+grammar;
+
+
+pub Expr: Box<Expression> = {
+    <l:Expr> "+" <r:Factor> => Box::new(Expression::BinaryOperation(BinaryOp::Plus, l, r)),
+    <l:Expr> "-" <r:Factor> => Box::new(Expression::BinaryOperation(BinaryOp::Minus, l, r)),
+    Factor,
+};
+
+Factor: Box<Expression> = {
+    <l:Factor> "*" <r:Term> => Box::new(Expression::BinaryOperation(BinaryOp::Multiply, l, r)),
+    <l:Factor> "/" <r:Term> => Box::new(Expression::BinaryOperation(BinaryOp::Divide, l, r)),
+    <l:Factor> "%" <r:Term> => Box::new(Expression::BinaryOperation(BinaryOp::Modulo, l, r)),
+    Term,
+};
+
+Term: Box<Expression> = {
+    "(" "-" <l: Literal> ")" => Box::new(Expression::UnaryOperation(UnaryOp::Neg, l)),
+    "(" <f:Function> ")" => Box::new(Expression::Function(f)),
+    Literal,
+};
+
+Literal: Box<Expression> = {
+    Num  => Box::new(<>),
+    Var  => Box::new(<>),
+    Word => Box::new(<>),
+    "(" <Expr> ")",
+};
+
+Num: Expression = {
+    <n: r"[0-9]+[\.]?[0-9]*"> => Expression::Number(f64::from_str(n).unwrap()),
+};
+
+Var: Expression = {
+    ":"<n: r"[a-zA-Z]+"> => Expression::Variable(String::from(n)),
+};
+
+Word: Expression = {
+    "\""<n: r"[a-zA-Z]+"> => Expression::Word(String::from(n)),
+};
+
+
+
+FuncName: String = {
+    r"[a-zA-Z]+" => String::from(<>)
+}
+
+pub Function: Func = {
+    <n:FuncName> => Func{name: n, args: vec![]},
+    <n:FuncName> <a:Args> => Func{name: n, args: a},
+}
+
+pub Instructions: Vec<Func> = {
+    <f: Function> => vec![f],
+    <i: Instructions> <f: Function> => cons(i, f),
+}
+
+pub Comp: Argumnet = {
+    <a:Expr> "<"  <b:Expr> => Argumnet::Comp(CompOp::Less, a, b),
+    <a:Expr> "<=" <b:Expr> => Argumnet::Comp(CompOp::LessEq, a, b),
+    <a:Expr> ">"  <b:Expr> => Argumnet::Comp(CompOp::Greater, a, b),
+    <a:Expr> ">=" <b:Expr> => Argumnet::Comp(CompOp::GreaterEq, a, b),
+    <a:Expr> "="  <b:Expr> => Argumnet::Comp(CompOp::Equal, a, b),
+}
+
+pub Arg: Argumnet = {
+    <e:Expr> => Argumnet::Expr(e),
+    Comp,
+    "[" <i:Instructions> "]" => Argumnet::List(i),
+    "[" "]" => Argumnet::List(vec![]),
+}
+
+pub Args: Vec<Argumnet> = {
+    <a:Arg>  => vec![a],
+    <a:Args> <x:Arg> => cons(a, x),
+}
+
+ArgsDec: Vec<String> = {
+    ":"<n: r"[a-zA-Z]+"> => vec![String::from(n)],
+    <args:ArgsDec> ":"<n: r"[a-zA-Z]+"> => cons(args, String::from(n))
+}
+
+pub FuncDec: FuncDeclaration = {
+    "TO" <n:FuncName> <i:Instructions> "END" => FuncDeclaration{name: n, args: vec![], instructions: i},
+    "TO" <n:FuncName> <a:ArgsDec> <i:Instructions> "END" => FuncDeclaration{name: n, args: a, instructions: i},
+}
+
+FuncsList: Vec<FuncDeclaration> = {
+    <f: FuncDec> => vec![f],
+    <l: FuncsList> <f: FuncDec> => cons(l, f),
+}
+
+pub Logo: Logo = {
+    <i:Instructions> => Logo{functions: vec![], instructions: i},
+    <f:FuncsList> <i:Instructions> => Logo{functions: f, instructions: i},
+}
+
